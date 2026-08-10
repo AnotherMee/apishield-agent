@@ -1,0 +1,9 @@
+**/.venv/
+**/node_modules/
+**/.pnpm-store/
+**/__pycache__/
+**/.env
+backend/.uploads/
+frontend/dist/
+frontend/*.tsbuildinfo
+*.pyc

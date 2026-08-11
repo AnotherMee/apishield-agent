@@ -1,18 +1,16 @@
 # APIShield Agent
 
-APIShield is a portfolio-grade, full-stack demonstration of a **passive API security review agent**. It accepts an OpenAPI document, inventories its operations, creates a prioritized review plan, collects explainable metadata-based signals, correlates them, and returns remediation-focused findings.
+APIShield is a portfolio-grade, full-stack demonstration of a **passive API security review agent**. It reviews a public URL or an OpenAPI document, creates a prioritized plan, collects explainable security signals, correlates findings, and returns remediation-focused guidance.
 
 It does **not** send traffic to described APIs, generate exploit payloads, or perform active vulnerability scanning.
 
 ## Architecture
 
 ```text
-React + TypeScript  ->  FastAPI  ->  LangGraph workflow
-                                      | parse
-                                      | plan (deterministic or OpenAI-assisted)
-                                      | collect passive signals
-                                      | correlate
-                                      ` report
+React -> FastAPI -> LangGraph -> Passive URL/OpenAPI analysis
+                              -> Finding correlation
+                              -> OpenAI-assisted planning/remediation
+                              -> Report
 ```
 
 - `frontend/`: responsive React dashboard built with Vite
@@ -65,7 +63,11 @@ Copy the provided `.env.example` files when overrides are needed.
 | --- | --- | --- |
 | `OPENAI_API_KEY` | unset | Enables optional OpenAI-assisted planning |
 | `OPENAI_MODEL` | `gpt-5-mini` | Planning model |
-| `CORS_ORIGINS` | local Vite origins | Comma-separated browser origins |
+| `ALLOWED_ORIGINS` | local Vite origins | Comma-separated browser origins |
+| `PASSIVE_REQUEST_TIMEOUT` | `8` | Per-request timeout for passive URL review |
+| `PASSIVE_MAX_REDIRECTS` | `3` | Maximum validated redirect hops |
+| `PASSIVE_MAX_RESPONSE_BYTES` | `1000000` | Maximum bytes read per response |
+| `PASSIVE_MAX_REQUESTS` | `5` | Maximum ordinary requests per URL review |
 | `MAX_UPLOAD_BYTES` | `2097152` | Backend upload limit |
 | `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | Browser-facing API URL |
 
@@ -73,7 +75,8 @@ When AI planning is unavailable or fails, the workflow deliberately falls back t
 
 ## Security boundaries
 
-- Reviews only OpenAPI YAML/JSON metadata supplied by the user.
+- Reviews supplied OpenAPI YAML/JSON metadata or public URL response metadata.
+- Resolves targets before requests and rejects unsafe address ranges, embedded credentials, unsupported schemes, and unsafe redirect destinations.
 - Uses unique temporary files and removes them after each request.
 - Rejects unsupported, empty, oversized, malformed, and non-OpenAPI inputs.
 - Returns stable client errors without exposing backend exception details.
@@ -82,4 +85,4 @@ When AI planning is unavailable or fails, the workflow deliberately falls back t
 - SonarQube `issues` and `hotspots` JSON exports can be imported through `POST /imports/sonarqube`.
 - `POST /imports/correlate` accepts one ZAP report and one SonarQube report, then correlates normalized findings using endpoint, category, and evidence similarity without contacting either scanner or target.
 
-Only assess systems you own or are explicitly authorized to test.
+Use APIShield for defensive review of public endpoints and API specifications you are permitted to assess.

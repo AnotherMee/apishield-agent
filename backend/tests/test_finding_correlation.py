@@ -1,5 +1,4 @@
 from app.tools.finding_correlation import correlate_imported_findings, correlation_score
-from app.agents.graph import correlate_node
 
 
 def finding(identifier, source, endpoint, category, evidence, severity="medium"):
@@ -46,36 +45,3 @@ def test_does_not_correlate_without_evidence_support() -> None:
     sonar = finding("SONAR-1", "sonarqube-import", "/users/{id}", "sql-injection", "unrelated static observation")
     assert correlation_score(zap, sonar) == 0.85
     assert len(correlate_imported_findings([zap], [sonar])) == 2
-
-
-def test_active_zap_signal_correlates_with_passive_finding() -> None:
-    state = {
-        "raw_findings": [
-            {
-                "source": "passive-http",
-                "method": "GET",
-                "endpoint": "/users",
-                "category": "missing-security-headers",
-                "severity": "low",
-                "evidence": "A response security header was absent.",
-            },
-            {
-                "source_tools": ["OWASP ZAP"],
-                "method": "GET",
-                "endpoint": "/users",
-                "category": "missing-security-headers",
-                "severity": "medium",
-                "confidence": 0.85,
-                "evidence": ["OWASP ZAP reported a missing security header."],
-                "potential_impact": "Missing headers may weaken browser defenses.",
-                "remediation": "Return the missing header.",
-            },
-        ],
-        "timeline": [],
-    }
-    result = correlate_node(state)
-    assert len(result["findings"]) == 1
-    finding = result["findings"][0]
-    assert finding["severity"] == "medium"
-    assert finding["status"] == "supported"
-    assert finding["source_tools"] == ["OWASP ZAP", "passive-http"]

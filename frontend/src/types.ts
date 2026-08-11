@@ -1,5 +1,5 @@
 export type Severity = "info" | "low" | "medium" | "high" | "critical"
-export type ScanMode = "passive" | "authorized_active"
+export type ScanMode = "passive"
 
 export type Finding = {
   id: string
@@ -72,27 +72,3 @@ export type ScanReport = {
   remediation_report: RemediationItem[]
   disclaimer: string
 }
-
-export type ScannerCapability = {
-  provider: string
-  configured: boolean
-  available: boolean
-  status: "ready" | "not-configured" | "disabled" | "unavailable"
-  detail: string
-}
-
-export type ActiveScanJob = {
-  id: string | null
-  scan_mode: "authorized_active"
-  target: string
-  provider: string
-  status: "authorization-required" | "target-outside-approved-scope" | "not-configured" | "zap-unavailable" | "queued" | "running" | "completed" | "failed" | "cancelled"
-  capability: ScannerCapability
-  findings: Finding[]
-  detail: string
-  progress: number
-  timeline: TimelineItem[]
-  report?: ScanReport | null
-}
-
-export type ZapHealth = { configured: boolean; reachable: boolean }

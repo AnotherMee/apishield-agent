@@ -1,9 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from "react"
-import { getZapHealth, MAX_UPLOAD_BYTES, runActiveScan, runPassiveDiscovery, runSampleScan, runUploadScan } from "./api"
-import type { ActiveScanJob, Observation, ScanReport, Severity, ZapHealth } from "./types"
+import { FormEvent, useMemo, useState } from "react"
+import { MAX_UPLOAD_BYTES, runPassiveDiscovery, runSampleScan, runUploadScan } from "./api"
+import type { Observation, ScanReport, Severity } from "./types"
 
-type Mode = "passive" | "active"
-type PassiveInput = "url" | "openapi"
+type ReviewInput = "url" | "openapi"
 
 function severityClass(severity: string) {
   return `severity severity-${severity}`
@@ -36,56 +35,15 @@ function observationValue(observation: Observation) {
   return String(value)
 }
 
-function ModeSelector({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
-  return (
-    <section className="mode-section" aria-labelledby="mode-heading">
-      <div className="section-intro">
-        <span className="micro">ANALYSIS MODE</span>
-        <h2 id="mode-heading">Choose the security boundary</h2>
-        <p>Passive observation and authorized active testing are separate workflows with different trust requirements.</p>
-      </div>
-      <div className="mode-tabs" role="tablist" aria-label="Security analysis mode">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "passive"}
-          className={`mode-card passive-mode ${mode === "passive" ? "selected" : ""}`}
-          onClick={() => onChange("passive")}
-        >
-          <span className="mode-label"><span className="mode-icon" aria-hidden="true">P</span> Passive Discovery</span>
-          <strong>Low-risk observation</strong>
-          <p>Ordinary HTTP requests and public API metadata. No exploit payloads, fuzzing, credential guessing, or active vulnerability testing.</p>
-          <span className="mode-boundary">Ordinary requests · No active exploitation</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "active"}
-          className={`mode-card active-mode ${mode === "active" ? "selected" : ""}`}
-          onClick={() => onChange("active")}
-        >
-          <span className="mode-label"><span className="mode-icon" aria-hidden="true">A</span> Authorized Active Scan</span>
-          <strong>Authorization-gated DAST</strong>
-          <p>Active security testing for targets you own or are explicitly authorized to test. OWASP ZAP runs only for backend-approved target origins.</p>
-          <span className="mode-boundary">Authorization and approved scope required</span>
-        </button>
-      </div>
-    </section>
-  )
-}
-
 function Observations({ observations }: { observations: Observation[] }) {
   if (!observations.length) return null
   return (
     <section className="panel observations-panel" aria-labelledby="observations-heading">
       <div className="panel-head">
-        <div>
-          <span className="micro">PASSIVE EVIDENCE</span>
-          <h2 id="observations-heading">Observed Response Metadata</h2>
-        </div>
+        <div><span className="micro">PASSIVE EVIDENCE</span><h2 id="observations-heading">Observed Response Metadata</h2></div>
         <span className="count-pill">{observations.length} observations</span>
       </div>
-      <p className="observation-note">These are response observations and review signals, not confirmed exploitable vulnerabilities.</p>
+      <p className="observation-note">These are response observations and review signals, not confirmed security incidents.</p>
       <div className="observation-grid">
         {observations.map((observation, index) => (
           <article className={`observation-card observation-${observation.category}`} key={`${observation.category}-${observation.url}-${index}`}>
@@ -109,10 +67,10 @@ function ReportResults({ report }: { report: ScanReport }) {
     <div className="report-stack">
       <section className="panel report-overview" aria-label="Analysis overview">
         <div className="report-identity">
-          <span className="micro">ANALYSIS RESULT</span>
+          <span className="micro">SECURITY REVIEW RESULT</span>
           <h2>{report.target || "OpenAPI specification"}</h2>
           <div className="report-tags">
-            <span>{report.scan_mode === "authorized_active" ? "Authorized Active Scan" : report.target ? "Passive Discovery" : "Passive OpenAPI Review"}</span>
+            <span>{report.target ? "Passive URL Review" : "Passive OpenAPI Review"}</span>
             <span>{report.planning_mode} planning</span>
             {report.planning_fallback_reason && <span className="fallback-tag">Fallback: {report.planning_fallback_reason}</span>}
           </div>
@@ -175,7 +133,7 @@ function ReportResults({ report }: { report: ScanReport }) {
             <div><span className="micro">NORMALIZED OUTPUT</span><h2>Security Review Findings</h2></div>
             <span className="count-pill">{report.findings.length} findings</span>
           </div>
-          <p className="observation-note">Findings identify conditions that need review; passive evidence is not proof of exploitability.</p>
+          <p className="observation-note">Findings identify conditions that need review; passive evidence does not establish that harm occurred.</p>
           <div className="findings">
             {report.findings.length ? report.findings.map((finding) => (
               <article className="finding" key={finding.id}>
@@ -198,7 +156,7 @@ function ReportResults({ report }: { report: ScanReport }) {
 
       <section className="panel remediation-panel">
         <div className="panel-head">
-          <div><span className="micro">FINAL REPORT</span><h2>Remediation Workstreams</h2></div>
+          <div><span className="micro">AI-ASSISTED REMEDIATION</span><h2>Remediation Workstreams</h2></div>
           <span className="count-pill">{report.remediation_report.length} priorities</span>
         </div>
         {report.remediation_report.length ? (
@@ -220,55 +178,14 @@ function ReportResults({ report }: { report: ScanReport }) {
   )
 }
 
-function ActiveResult({ job }: { job: ActiveScanJob }) {
-  const completed = job.status === "completed"
-  return (
-    <section className="panel active-result" role="status" aria-live="polite">
-      <div className="status-symbol" aria-hidden="true">!</div>
-      <div>
-        <span className="micro">ACTIVE SCANNER STATUS</span>
-        <h2>{titleCase(job.status)}</h2>
-        <p>{completed ? "OWASP ZAP completed the authorized active scan." : "The active scan did not complete."}</p>
-        <p>{job.detail}</p>
-        <div className="active-result-facts">
-          <span><strong>Target</strong>{job.target}</span>
-          <span><strong>Scanner</strong>OWASP ZAP</span>
-          <span><strong>Findings</strong>{job.findings.length}</span>
-        </div>
-        <div className="safety-confirmation">
-          {completed
-            ? "Findings were returned by OWASP ZAP and normalized by APIShield; manual validation is still required."
-            : "No findings were fabricated or simulated. Review the status above before retrying."}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 export default function App() {
-  const [mode, setMode] = useState<Mode>("passive")
-  const [passiveInput, setPassiveInput] = useState<PassiveInput>("url")
+  const [reviewInput, setReviewInput] = useState<ReviewInput>("url")
   const [target, setTarget] = useState("")
-  const [activeTarget, setActiveTarget] = useState("")
-  const [authorized, setAuthorized] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [useAI, setUseAI] = useState(true)
   const [report, setReport] = useState<ScanReport | null>(null)
-  const [activeJob, setActiveJob] = useState<ActiveScanJob | null>(null)
-  const [zapHealth, setZapHealth] = useState<ZapHealth | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-
-  useEffect(() => {
-    void getZapHealth().then(setZapHealth).catch(() => setZapHealth(null))
-  }, [])
-
-  function switchMode(next: Mode) {
-    setMode(next)
-    setError("")
-    setReport(null)
-    setActiveJob(null)
-  }
 
   async function execute(task: () => Promise<void>) {
     setLoading(true)
@@ -282,39 +199,17 @@ export default function App() {
     }
   }
 
-  function submitPassive(event: FormEvent) {
+  function submitUrl(event: FormEvent) {
     event.preventDefault()
     if (!isValidHttpUrl(target)) {
       setError("Enter a valid public URL beginning with http:// or https://.")
       return
     }
-    void execute(async () => {
-      setReport(await runPassiveDiscovery(target, useAI))
-      setActiveJob(null)
-    })
-  }
-
-  function submitActive(event: FormEvent) {
-    event.preventDefault()
-    if (!authorized) {
-      setError("Authorization acknowledgement is required before requesting an active scan.")
-      return
-    }
-    if (!isValidHttpUrl(activeTarget)) {
-      setError("Enter a valid target URL beginning with http:// or https://.")
-      return
-    }
-    void execute(async () => {
-      setActiveJob(await runActiveScan(activeTarget, useAI))
-      setReport(null)
-    })
+    void execute(async () => setReport(await runPassiveDiscovery(target, useAI)))
   }
 
   function sampleScan() {
-    void execute(async () => {
-      setReport(await runSampleScan(useAI))
-      setActiveJob(null)
-    })
+    void execute(async () => setReport(await runSampleScan(useAI)))
   }
 
   function uploadScan() {
@@ -323,112 +218,75 @@ export default function App() {
       setError("The selected OpenAPI file exceeds the 2 MB upload limit.")
       return
     }
-    void execute(async () => {
-      setReport(await runUploadScan(file, useAI))
-      setActiveJob(null)
-    })
+    void execute(async () => setReport(await runUploadScan(file, useAI)))
   }
 
   return (
     <div className="page" aria-busy={loading}>
       <nav className="nav">
         <div className="brand"><div className="brand-mark">A</div><div><strong>APIShield</strong><span>Agent</span></div></div>
-        <div className="nav-pill">Defensive Security Analysis</div>
+        <div className="nav-pill">Passive Defensive Analysis</div>
       </nav>
 
       <header className="hero compact-hero">
         <div className="hero-copy">
           <div className="kicker">AGENTIC API SECURITY REVIEW</div>
-          <h1>Agentic API Security: From Discovery to Remediation</h1>
-          <p>Discover API security risks, orchestrate findings through LangGraph, and generate AI-assisted remediation guidance.</p>
+          <h1>APIShield — Agentic API Security Review</h1>
+          <p>Discover API security risks, correlate evidence through LangGraph, and generate AI-assisted remediation guidance.</p>
         </div>
         <div className="trust-summary panel">
-          <span className="micro">CURRENT CAPABILITY</span>
-          <div><strong>Passive Discovery</strong><span>Available</span></div>
-          <div><strong>Authorized Active Scan</strong><span>{zapHealth?.reachable ? "Available" : zapHealth?.configured ? "ZAP unavailable" : "Not configured"}</span></div>
+          <span className="micro">TRUST BOUNDARY</span>
+          <strong>Passive defensive analysis</strong>
+          <p>Uses bounded ordinary requests and supplied API metadata.</p>
         </div>
       </header>
 
       <main>
-        <ModeSelector mode={mode} onChange={switchMode} />
+        <section className="panel configuration-panel" aria-labelledby="review-heading">
+          <div className="panel-head">
+            <div><span className="micro">START A SECURITY REVIEW</span><h2 id="review-heading">Choose an input</h2></div>
+            <span className="risk-badge low-risk">Passive review</span>
+          </div>
+          <fieldset className="input-switcher">
+            <legend className="sr-only">Security review input</legend>
+            <label><input type="radio" name="review-input" value="url" checked={reviewInput === "url"} onChange={() => { setReviewInput("url"); setError("") }} /><span>Analyze URL</span></label>
+            <label><input type="radio" name="review-input" value="openapi" checked={reviewInput === "openapi"} onChange={() => { setReviewInput("openapi"); setError("") }} /><span>Analyze OpenAPI</span></label>
+          </fieldset>
 
-        {mode === "passive" ? (
-          <section className="panel configuration-panel" role="tabpanel" aria-label="Passive Discovery configuration">
-            <div className="panel-head">
-              <div><span className="micro">PASSIVE CONFIGURATION</span><h2>Choose a passive input</h2></div>
-              <span className="risk-badge low-risk">Low-risk workflow</span>
-            </div>
-            <fieldset className="input-switcher">
-              <legend className="sr-only">Passive analysis input</legend>
-              <label><input type="radio" name="passive-input" value="url" checked={passiveInput === "url"} onChange={() => { setPassiveInput("url"); setError("") }} /><span>Analyze URL</span></label>
-              <label><input type="radio" name="passive-input" value="openapi" checked={passiveInput === "openapi"} onChange={() => { setPassiveInput("openapi"); setError("") }} /><span>Analyze OpenAPI specification</span></label>
-            </fieldset>
-
-            {passiveInput === "url" ? (
-              <form className="target-form" onSubmit={submitPassive}>
-                <label htmlFor="passive-target">Public target URL</label>
-                <span>APIShield makes bounded ordinary HTTP requests. Internal, private, loopback, link-local, credential-bearing, and malformed targets are rejected.</span>
-                <div className="url-row">
-                  <input id="passive-target" type="url" inputMode="url" placeholder="https://api.example.com" value={target} onChange={(event) => setTarget(event.target.value)} required />
-                  <button type="submit" disabled={loading}>{loading ? "Discovering…" : "Run Passive Discovery"}</button>
-                </div>
-              </form>
-            ) : (
-              <div className="openapi-workspace">
-                <label className="upload">
-                  <input type="file" accept=".yaml,.yml,.json" onChange={(event) => { setFile(event.target.files?.[0] || null); setError("") }} />
-                  <div className="upload-icon" aria-hidden="true">↑</div>
-                  <strong>{file ? file.name : "Upload OpenAPI specification"}</strong>
-                  <span>YAML or JSON · 2 MB maximum · Static metadata review</span>
-                </label>
-                <div className="scan-actions">
-                  <button type="button" onClick={uploadScan} disabled={!file || loading}>{loading ? "Analyzing…" : "Analyze Upload"}</button>
-                  <button type="button" className="ghost" onClick={sampleScan} disabled={loading}>Run Sample Specification</button>
-                </div>
+          {reviewInput === "url" ? (
+            <form className="target-form" onSubmit={submitUrl}>
+              <label htmlFor="review-target">Target URL</label>
+              <span>APIShield makes bounded ordinary HTTP requests and blocks internal, private, loopback, link-local, credential-bearing, and malformed targets.</span>
+              <div className="url-row">
+                <input id="review-target" type="url" inputMode="url" placeholder="https://api.example.com" value={target} onChange={(event) => setTarget(event.target.value)} required />
+                <button type="submit" disabled={loading}>{loading ? "Reviewing…" : "Start Security Review"}</button>
               </div>
-            )}
-
-            <label className="ai-toggle">
-              <input type="checkbox" checked={useAI} onChange={(event) => setUseAI(event.target.checked)} />
-              <div><strong>Use AI-assisted planning</strong><span>Falls back to deterministic planning when the backend has no OpenAI key.</span></div>
-            </label>
-            {error && <div className="error" role="alert">{error}</div>}
-          </section>
-        ) : (
-          <section className="panel configuration-panel active-configuration" role="tabpanel" aria-label="Authorized Active Scan configuration">
-            <div className="panel-head">
-              <div><span className="micro active-micro">AUTHORIZED ACTIVE CONFIGURATION</span><h2>Prepare an authorization-gated scan</h2></div>
-              <span className="risk-badge authorization-required">Authorization required</span>
-            </div>
-            <div className="authorization-notice" role="note">
-              <strong>Active security testing trust boundary</strong>
-              <p>This workflow is intended only for systems you own or have explicit permission to test. The backend also requires the target origin to be present in its approved active-scan scope.</p>
-            </div>
-            <form className="target-form" onSubmit={submitActive}>
-              <label htmlFor="active-target">Authorized target URL</label>
-              <input id="active-target" type="url" inputMode="url" placeholder="https://authorized-api.example.com" value={activeTarget} onChange={(event) => setActiveTarget(event.target.value)} required />
-              <div className="scanner-status" aria-label="Scanner configuration">
-                <span><small>Scanner</small><strong>OWASP ZAP</strong></span>
-                <span><small>Scanner status</small><strong>{zapHealth?.reachable ? "Ready" : zapHealth?.configured ? "Unavailable" : "Not configured"}</strong></span>
-                <span><small>Scope enforcement</small><strong>Backend approved origins only</strong></span>
-              </div>
-              <label className="authorization-check" htmlFor="authorization-confirmation">
-                <input id="authorization-confirmation" type="checkbox" checked={authorized} onChange={(event) => { setAuthorized(event.target.checked); setError("") }} />
-                <span>I confirm that I own this target or have explicit authorization to perform security testing against it.</span>
-              </label>
-              <button type="submit" disabled={!authorized || loading} aria-describedby={!authorized ? "active-disabled-reason" : undefined}>
-                {loading ? "OWASP ZAP scan running…" : "Run Active Scan"}
-              </button>
-              {!authorized && <p id="active-disabled-reason" className="disabled-reason">Acknowledge authorization to enable this request. The scanner remains unavailable until OWASP ZAP is configured.</p>}
             </form>
-            {error && <div className="error" role="alert">{error}</div>}
-          </section>
-        )}
+          ) : (
+            <div className="openapi-workspace">
+              <label className="upload">
+                <input type="file" accept=".yaml,.yml,.json" onChange={(event) => { setFile(event.target.files?.[0] || null); setError("") }} />
+                <div className="upload-icon" aria-hidden="true">↑</div>
+                <strong>{file ? file.name : "Upload OpenAPI specification"}</strong>
+                <span>YAML or JSON · 2 MB maximum · Static metadata review</span>
+              </label>
+              <div className="scan-actions">
+                <button type="button" onClick={uploadScan} disabled={!file || loading}>{loading ? "Reviewing…" : "Analyze Upload"}</button>
+                <button type="button" className="ghost" onClick={sampleScan} disabled={loading}>Run Sample Specification</button>
+              </div>
+            </div>
+          )}
 
-        {loading && <div className="loading-banner" role="status" aria-live="polite">{mode === "active" ? "OWASP ZAP scan running…" : "APIShield is processing the request…"}</div>}
+          <label className="ai-toggle">
+            <input type="checkbox" checked={useAI} onChange={(event) => setUseAI(event.target.checked)} />
+            <div><strong>Use AI-assisted planning</strong><span>Uses deterministic planning when OpenAI is unavailable and reports the fallback reason.</span></div>
+          </label>
+          <p className="workflow-summary">URL or OpenAPI → Security Review → Findings → Remediation</p>
+          {error && <div className="error" role="alert">{error}</div>}
+        </section>
+
+        {loading && <div className="loading-banner" role="status" aria-live="polite">APIShield is processing the security review…</div>}
         {report && <ReportResults report={report} />}
-        {activeJob && <ActiveResult job={activeJob} />}
-        {activeJob?.report && <ReportResults report={activeJob.report} />}
       </main>
 
       <footer><span>APIShield Agent</span><span>LangGraph · FastAPI · React · OpenAI-ready</span></footer>

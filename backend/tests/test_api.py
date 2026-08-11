@@ -38,8 +38,8 @@ def test_sample_review_is_deterministic() -> None:
     assert report["planning_mode"] == "Deterministic"
     assert report["planning_fallback_reason"] == "AI-assisted planning not requested"
     assert report["summary"]["total_findings"] == 4
-    assert len(report["timeline"]) == 5
-    assert [event["node"] for event in report["timeline"]] == ["parse", "plan", "scan", "correlate", "report"]
+    assert len(report["timeline"]) == 6
+    assert [event["node"] for event in report["timeline"]] == ["parse", "plan", "scan", "correlate", "remediation", "report"]
     assert report["timeline"][0]["tool_invocations"][0]["name"] == "openapi_parser.inventory"
     assert "AI-assisted planning not requested" in report["timeline"][1]["detail"]
     assert len(report["remediation_report"]) == 4

@@ -1,4 +1,4 @@
-import type { ActiveScanJob, ScanReport, ZapHealth } from "./types"
+import type { ScanReport } from "./types"
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
 
@@ -33,30 +33,6 @@ export function runPassiveDiscovery(target: string, useAI: boolean): Promise<Sca
     },
     "Passive discovery could not be completed",
   )
-}
-
-export function runActiveScan(target: string, useAI: boolean): Promise<ActiveScanJob> {
-  return request(
-    "/scans/active",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        target,
-        use_ai: useAI,
-        provider: "zap",
-        authorization: {
-          acknowledged: true,
-          statement: "I confirm that I own this target or have explicit authorization to perform security testing against it.",
-        },
-      }),
-    },
-    "The active scanner request could not be completed",
-  )
-}
-
-export function getZapHealth(): Promise<ZapHealth> {
-  return request("/health/zap", { method: "GET" }, "Could not check OWASP ZAP status")
 }
 
 export function runSampleScan(useAI: boolean): Promise<ScanReport> {

@@ -6,9 +6,7 @@ from app.tools.openapi_parser import load_spec, inventory
 from app.tools.scanners import collect_defensive_signals
 from app.agents.planner import create_plan
 from app.models import ScanMode
-from app.services.active_scan import run_active_scan
 from app.tools.finding_impacts import potential_impact_for
-from app.tools.zap_client import ZapClient, normalize_zap_alerts
 
 class State(TypedDict, total=False):
     spec_path: str
@@ -24,10 +22,6 @@ class State(TypedDict, total=False):
     findings: list[dict]
     timeline: list[dict]
     report: dict
-    active_job: dict
-    active_request: object
-    zap_alerts: list[dict]
-    zap_client: object
 
 SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
@@ -92,7 +86,7 @@ def scan_node(state: State):
     return {
         "raw_findings": findings,
         "timeline": add_event(
-            state, "scan", "Collect Signals", f"Collected {len(findings)} defensive review signals",
+            state, "scan", "Collect Security Signals", f"Collected {len(findings)} defensive review signals",
             "scanners.collect_defensive_signals", f"Applied passive metadata rules to {len(state['endpoints'])} endpoints.",
         ),
     }
@@ -149,35 +143,9 @@ def passive_signal_node(state: State):
     return {
         "raw_findings": findings,
         "timeline": add_event(
-            state, "passive-signals", "Analyze Passive Observations",
+            state, "passive-signals", "Collect Security Signals",
             f"Converted {len(observations)} observations into {len(findings)} review signals",
             "passive_discovery.observations", "Applied non-invasive rules to ordinary HTTP response metadata.",
-        ),
-    }
-
-
-async def active_scan_node(state: State):
-    job, alerts = await run_active_scan(
-        state["active_request"], state.get("zap_client") or ZapClient()
-    )
-    return {
-        "active_job": job.model_dump(mode="json"),
-        "zap_alerts": alerts,
-        "timeline": add_event(
-            state, "run-zap", "Run OWASP ZAP", job.detail,
-            "zap_client.run_authorized_scan", f"Active scan status: {job.status}.",
-        ),
-    }
-
-
-def normalize_zap_node(state: State):
-    findings = normalize_zap_alerts(state.get("zap_alerts", []), state.get("target") or "")
-    return {
-        "raw_findings": findings,
-        "timeline": add_event(
-            state, "normalize-zap", "Normalize ZAP Findings",
-            f"Normalized {len(findings)} OWASP ZAP alerts",
-            "zap_client.normalize_zap_alerts", "Converted ZAP alerts into APIShield's common finding schema.",
         ),
     }
 
@@ -191,14 +159,6 @@ def remediation_node(state: State):
         )
     }
 
-
-def active_report_node(state: State):
-    result = report_node(state)
-    job = dict(state["active_job"])
-    job["findings"] = state.get("findings", [])
-    job["timeline"] = result["timeline"]
-    job["report"] = result["report"]
-    return {**result, "active_job": job}
 
 def correlate_node(state: State):
     grouped = defaultdict(list)
@@ -299,7 +259,7 @@ def report_node(state: State):
         "findings": state["findings"],
         "observations": state.get("observations", []),
         "remediation_report": remediation_report,
-        "disclaimer": "Only assess APIs you own or are explicitly authorized to test.",
+        "disclaimer": "Passive findings are review signals and do not establish that harm occurred.",
     }
 
     return {"timeline": timeline, "report": report}
@@ -310,13 +270,15 @@ def build_graph():
     g.add_node("plan", plan_node)
     g.add_node("scan", scan_node)
     g.add_node("correlate", correlate_node)
+    g.add_node("remediation", remediation_node)
     g.add_node("report", report_node)
 
     g.add_edge(START, "parse")
     g.add_edge("parse", "plan")
     g.add_edge("plan", "scan")
     g.add_edge("scan", "correlate")
-    g.add_edge("correlate", "report")
+    g.add_edge("correlate", "remediation")
+    g.add_edge("remediation", "report")
     g.add_edge("report", END)
 
     return g.compile()
@@ -327,27 +289,11 @@ def build_passive_graph():
     g.add_node("plan", plan_node)
     g.add_node("passive-signals", passive_signal_node)
     g.add_node("correlate", correlate_node)
+    g.add_node("remediation", remediation_node)
     g.add_node("report", report_node)
     g.add_edge(START, "plan")
     g.add_edge("plan", "passive-signals")
     g.add_edge("passive-signals", "correlate")
-    g.add_edge("correlate", "report")
-    g.add_edge("report", END)
-    return g.compile()
-
-
-def build_active_graph():
-    g = StateGraph(State)
-    g.add_node("plan", plan_node)
-    g.add_node("run-zap", active_scan_node)
-    g.add_node("normalize-zap", normalize_zap_node)
-    g.add_node("correlate", correlate_node)
-    g.add_node("remediation", remediation_node)
-    g.add_node("report", active_report_node)
-    g.add_edge(START, "plan")
-    g.add_edge("plan", "run-zap")
-    g.add_edge("run-zap", "normalize-zap")
-    g.add_edge("normalize-zap", "correlate")
     g.add_edge("correlate", "remediation")
     g.add_edge("remediation", "report")
     g.add_edge("report", END)

@@ -1,1 +1,0 @@
-"""External scanner provider integrations."""

@@ -28,14 +28,19 @@ export default function App() {
   const [report, setReport] = useState<ScanReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [backendStatus, setBackendStatus] = useState<"not-checked" | "checking" | "online" | "unavailable">("not-checked")
 
   async function execute(task: () => Promise<ScanReport>) {
     setLoading(true)
+    setBackendStatus("checking")
     setError("")
     try {
       setReport(await task())
+      setBackendStatus("online")
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The request could not be completed.")
+      const message = caught instanceof Error ? caught.message : "The request could not be completed."
+      setError(message)
+      setBackendStatus(message.includes("could not reach the backend") ? "unavailable" : "online")
     } finally {
       setLoading(false)
     }
@@ -60,7 +65,7 @@ export default function App() {
 
   return (
     <div className="app-shell" aria-busy={loading}>
-      <Sidebar />
+      <Sidebar report={report} backendStatus={backendStatus} />
       <div className="app-main">
         <Hero />
         <main className="content" id="new-review">
@@ -89,11 +94,11 @@ export default function App() {
             <div className="report-stack" id="reports">
               <MetricsPanel report={report} />
               <ObservationsPanel observations={report.observations || []} />
-              <div className="analysis-grid">
+              <div className="dashboard-grid">
                 <WorkflowPanel timeline={report.timeline} plan={report.plan} />
                 <FindingsPanel findings={report.findings} disclaimer={report.disclaimer} />
+                <RemediationPanel items={report.remediation_report} />
               </div>
-              <RemediationPanel items={report.remediation_report} />
             </div>
           )}
         </main>

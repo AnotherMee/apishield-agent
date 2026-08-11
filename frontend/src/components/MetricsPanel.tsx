@@ -8,7 +8,7 @@ export function MetricsPanel({ report }: { report: ScanReport }) {
   }, [report])
 
   return (
-    <section className="card metrics-panel" aria-labelledby="overview-heading">
+    <section className="metrics-panel" aria-labelledby="overview-heading">
       <div className="report-header">
         <div className="section-heading"><span>OVERVIEW</span><h2 id="overview-heading">{report.target || "OpenAPI specification"}</h2></div>
         <div className="report-tags">
@@ -17,10 +17,10 @@ export function MetricsPanel({ report }: { report: ScanReport }) {
         </div>
       </div>
       <div className="metrics">
-        <div><span>Endpoints</span><strong>{report.endpoint_count}</strong></div>
-        <div><span>Findings</span><strong>{report.summary.total_findings}</strong></div>
-        <div><span>Highest Risk</span><strong className={`risk-value risk-${highest.toLowerCase()}`}>{highest}</strong></div>
-        <div><span>Planning Mode</span><strong>{report.planning_mode}</strong></div>
+        <div className="card"><span>Endpoints</span><strong>{report.endpoint_count}</strong></div>
+        <div className="card"><span>Findings</span><strong>{report.summary.total_findings}</strong></div>
+        <div className="card"><span>Highest Risk</span><strong className={`risk-value risk-${highest.toLowerCase()}`}>{highest}</strong></div>
+        <div className="card"><span>Planning Mode</span><strong className={report.planning_mode.toLowerCase().includes("openai") ? "planning-ai" : ""}>{report.planning_mode}</strong></div>
       </div>
     </section>
   )

@@ -17,6 +17,25 @@ from app.tools.finding_correlation import correlate_imported_findings
 logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parents[1]
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(2 * 1024 * 1024)))
+DEFAULT_ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+
+
+def get_allowed_origins() -> list[str]:
+    return [
+        origin.strip().rstrip("/")
+        for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",")
+        if origin.strip()
+    ]
+
+
+def configure_cors(application: FastAPI) -> None:
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=get_allowed_origins(),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
 
 app = FastAPI(
     title="APIShield Agent API",
@@ -24,15 +43,7 @@ app = FastAPI(
     description="Passive, specification-based API security review powered by LangGraph.",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv(
-        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
-    ).split(","),
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
-)
+configure_cors(app)
 
 def initial_state(spec_path: str, use_ai: bool):
     return {

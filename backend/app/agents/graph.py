@@ -6,7 +6,9 @@ from app.tools.openapi_parser import load_spec, inventory
 from app.tools.scanners import collect_defensive_signals
 from app.agents.planner import create_plan
 from app.models import ScanMode
-from app.services.active_scan import active_scan_capability
+from app.services.active_scan import run_active_scan
+from app.tools.finding_impacts import potential_impact_for
+from app.tools.zap_client import ZapClient, normalize_zap_alerts
 
 class State(TypedDict, total=False):
     spec_path: str
@@ -23,6 +25,9 @@ class State(TypedDict, total=False):
     timeline: list[dict]
     report: dict
     active_job: dict
+    active_request: object
+    zap_alerts: list[dict]
+    zap_client: object
 
 SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
@@ -151,27 +156,49 @@ def passive_signal_node(state: State):
     }
 
 
-def active_placeholder_node(state: State):
-    capability = active_scan_capability()
-    job = {
-        "id": None,
-        "scan_mode": ScanMode.AUTHORIZED_ACTIVE.value,
-        "target": state.get("target") or "",
-        "provider": capability.provider,
-        "status": "not-configured",
-        "capability": capability.model_dump(),
-        "findings": [],
-        "detail": capability.detail,
-    }
+async def active_scan_node(state: State):
+    job, alerts = await run_active_scan(
+        state["active_request"], state.get("zap_client") or ZapClient()
+    )
     return {
-        "active_job": job,
-        "raw_findings": [],
+        "active_job": job.model_dump(mode="json"),
+        "zap_alerts": alerts,
         "timeline": add_event(
-            state, "active-placeholder", "Check Active Scanner Capability",
-            "No active scan was started and no target traffic was sent",
-            "active_scan.capability", capability.detail,
+            state, "run-zap", "Run OWASP ZAP", job.detail,
+            "zap_client.run_authorized_scan", f"Active scan status: {job.status}.",
         ),
     }
+
+
+def normalize_zap_node(state: State):
+    findings = normalize_zap_alerts(state.get("zap_alerts", []), state.get("target") or "")
+    return {
+        "raw_findings": findings,
+        "timeline": add_event(
+            state, "normalize-zap", "Normalize ZAP Findings",
+            f"Normalized {len(findings)} OWASP ZAP alerts",
+            "zap_client.normalize_zap_alerts", "Converted ZAP alerts into APIShield's common finding schema.",
+        ),
+    }
+
+
+def remediation_node(state: State):
+    return {
+        "timeline": add_event(
+            state, "remediation", "Generate Remediation",
+            f"Prepared evidence-aware impact and remediation guidance for {len(state.get('findings', []))} findings",
+            "finding_impacts.potential_impact_for", "Applied deterministic guidance with safe fallback wording.",
+        )
+    }
+
+
+def active_report_node(state: State):
+    result = report_node(state)
+    job = dict(state["active_job"])
+    job["findings"] = state.get("findings", [])
+    job["timeline"] = result["timeline"]
+    job["report"] = result["report"]
+    return {**result, "active_job": job}
 
 def correlate_node(state: State):
     grouped = defaultdict(list)
@@ -181,20 +208,35 @@ def correlate_node(state: State):
     findings = []
     for idx, ((method, endpoint, category), items) in enumerate(grouped.items(), start=1):
         severity = max((x["severity"] for x in items), key=lambda s: SEVERITY_ORDER[s])
-        sources = sorted({x["source"] for x in items})
-        confidence = 0.64 + min(0.24, 0.08 * len(items))
+        sources = sorted({
+            source
+            for item in items
+            for source in (item.get("source_tools") or [item.get("source", "unknown")])
+        })
+        confidence = max(
+            [float(item.get("confidence", 0)) for item in items] + [0.64 + min(0.24, 0.08 * len(items))]
+        )
         if severity in {"high", "critical"}:
             confidence += 0.04
 
+        evidence = []
+        for item in items:
+            item_evidence = item.get("evidence", [])
+            if isinstance(item_evidence, str):
+                item_evidence = [item_evidence]
+            evidence.extend(str(value) for value in item_evidence if value)
+
         findings.append({
             "id": f"F-{idx:03d}",
+            "source": sources[0] if len(sources) == 1 else "Correlated",
             "method": method,
             "endpoint": endpoint,
             "category": category,
             "severity": severity,
             "confidence": round(min(confidence, 0.94), 2),
-            "evidence": [x["evidence"] for x in items],
+            "evidence": list(dict.fromkeys(evidence)),
             "source_tools": sources,
+            "potential_impact": items[0].get("potential_impact") or potential_impact_for(category, severity),
             "remediation": items[0].get("remediation") or REMEDIATION.get(category, "Review and validate this finding manually."),
             "status": "needs-review" if len(sources) == 1 else "supported",
         })
@@ -297,12 +339,16 @@ def build_passive_graph():
 def build_active_graph():
     g = StateGraph(State)
     g.add_node("plan", plan_node)
-    g.add_node("active-placeholder", active_placeholder_node)
+    g.add_node("run-zap", active_scan_node)
+    g.add_node("normalize-zap", normalize_zap_node)
     g.add_node("correlate", correlate_node)
-    g.add_node("report", report_node)
+    g.add_node("remediation", remediation_node)
+    g.add_node("report", active_report_node)
     g.add_edge(START, "plan")
-    g.add_edge("plan", "active-placeholder")
-    g.add_edge("active-placeholder", "correlate")
-    g.add_edge("correlate", "report")
+    g.add_edge("plan", "run-zap")
+    g.add_edge("run-zap", "normalize-zap")
+    g.add_edge("normalize-zap", "correlate")
+    g.add_edge("correlate", "remediation")
+    g.add_edge("remediation", "report")
     g.add_edge("report", END)
     return g.compile()

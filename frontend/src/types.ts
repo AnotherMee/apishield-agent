@@ -3,6 +3,7 @@ export type ScanMode = "passive" | "authorized_active"
 
 export type Finding = {
   id: string
+  source?: string | null
   method: string
   endpoint: string
   category: string
@@ -10,6 +11,7 @@ export type Finding = {
   confidence: number
   evidence: string[]
   source_tools: string[]
+  potential_impact: string
   remediation: string
   status: string
   correlation?: Record<string, unknown> | null
@@ -75,7 +77,7 @@ export type ScannerCapability = {
   provider: string
   configured: boolean
   available: boolean
-  status: "ready" | "not-configured" | "disabled"
+  status: "ready" | "not-configured" | "disabled" | "unavailable"
   detail: string
 }
 
@@ -84,8 +86,13 @@ export type ActiveScanJob = {
   scan_mode: "authorized_active"
   target: string
   provider: string
-  status: "not-configured" | "queued" | "running" | "completed" | "failed" | "cancelled"
+  status: "authorization-required" | "target-outside-approved-scope" | "not-configured" | "zap-unavailable" | "queued" | "running" | "completed" | "failed" | "cancelled"
   capability: ScannerCapability
   findings: Finding[]
   detail: string
+  progress: number
+  timeline: TimelineItem[]
+  report?: ScanReport | null
 }
+
+export type ZapHealth = { configured: boolean; reachable: boolean }

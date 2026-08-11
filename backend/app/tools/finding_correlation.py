@@ -1,6 +1,8 @@
 import re
 from urllib.parse import urlsplit
 
+from app.tools.finding_impacts import potential_impact_for
+
 
 SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 TOKEN_PATTERN = re.compile(r"[a-z0-9]{3,}")
@@ -73,6 +75,7 @@ def _merge(zap: dict, sonar: dict, index: int) -> dict:
         "confidence": round(min(0.97, max(zap["confidence"], sonar["confidence"]) + 0.1), 2),
         "evidence": evidence,
         "source_tools": sorted(set(zap["source_tools"] + sonar["source_tools"])),
+        "potential_impact": zap.get("potential_impact") or sonar.get("potential_impact") or potential_impact_for(normalize_category(zap["category"]), severity),
         "remediation": " ".join(remediations),
         "status": "supported",
         "correlation": {

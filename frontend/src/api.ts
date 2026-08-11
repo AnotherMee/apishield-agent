@@ -1,4 +1,4 @@
-import type { ActiveScanJob, ScanReport } from "./types"
+import type { ActiveScanJob, ScanReport, ZapHealth } from "./types"
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
 
@@ -53,6 +53,10 @@ export function runActiveScan(target: string, useAI: boolean): Promise<ActiveSca
     },
     "The active scanner request could not be completed",
   )
+}
+
+export function getZapHealth(): Promise<ZapHealth> {
+  return request("/health/zap", { method: "GET" }, "Could not check OWASP ZAP status")
 }
 
 export function runSampleScan(useAI: boolean): Promise<ScanReport> {

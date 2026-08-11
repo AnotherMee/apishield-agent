@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agents.graph import build_active_graph, build_graph, build_passive_graph
 from app.models import ActiveScanJob, ActiveScanRequest, PassiveDiscoveryRequest, ScanMode, ScanReport
 from app.services.passive_discovery import PassiveDiscoveryError, passive_discover
+from app.services.active_scan import zap_health_status
 from app.services.target_policy import TargetPolicyError
 from app.tools.zap_importer import parse_zap_results
 from app.tools.sonarqube_importer import parse_sonarqube_results
@@ -76,6 +77,11 @@ def openai_health():
     }
 
 
+@app.get("/health/zap")
+async def zap_health():
+    return await zap_health_status()
+
+
 def mode_state(mode: ScanMode, target: str, use_ai: bool) -> dict:
     return {
         "scan_mode": mode.value,
@@ -90,6 +96,7 @@ def mode_state(mode: ScanMode, target: str, use_ai: bool) -> dict:
         "findings": [],
         "timeline": [],
         "report": {},
+        "zap_alerts": [],
     }
 
 
@@ -111,6 +118,7 @@ async def discover_passively(request: PassiveDiscoveryRequest):
 @app.post("/scans/active", response_model=ActiveScanJob)
 async def request_authorized_active_scan(request: ActiveScanRequest):
     state = mode_state(ScanMode.AUTHORIZED_ACTIVE, str(request.target), request.use_ai)
+    state["active_request"] = request
     result = await build_active_graph().ainvoke(state)
     return result["active_job"]
 

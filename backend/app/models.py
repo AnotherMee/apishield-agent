@@ -44,6 +44,7 @@ class Observation(BaseModel):
 
 class Finding(BaseModel):
     id: str
+    source: str | None = None
     method: str
     endpoint: str
     category: str
@@ -51,6 +52,7 @@ class Finding(BaseModel):
     confidence: float = Field(ge=0, le=1)
     evidence: list[str] = Field(default_factory=list)
     source_tools: list[str] = Field(default_factory=list)
+    potential_impact: str
     remediation: str
     status: str
     correlation: dict[str, Any] | None = None
@@ -76,7 +78,7 @@ class ScannerCapability(BaseModel):
     provider: str
     configured: bool
     available: bool
-    status: Literal["ready", "not-configured", "disabled"]
+    status: Literal["ready", "not-configured", "disabled", "unavailable"]
     detail: str
 
 
@@ -85,7 +87,20 @@ class ActiveScanJob(BaseModel):
     scan_mode: ScanMode = ScanMode.AUTHORIZED_ACTIVE
     target: str
     provider: str
-    status: Literal["not-configured", "queued", "running", "completed", "failed", "cancelled"]
+    status: Literal[
+        "authorization-required",
+        "target-outside-approved-scope",
+        "not-configured",
+        "zap-unavailable",
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+    ]
     capability: ScannerCapability
     findings: list[Finding] = Field(default_factory=list)
     detail: str
+    progress: int = Field(default=0, ge=0, le=100)
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
+    report: ScanReport | None = None

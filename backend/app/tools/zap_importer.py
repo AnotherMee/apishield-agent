@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from app.tools.finding_impacts import potential_impact_for
+
 
 RISK_CODE_MAP = {0: "info", 1: "low", 2: "medium", 3: "high", 4: "critical"}
 CONFIDENCE_CODE_MAP = {0: 0.2, 1: 0.4, 2: 0.65, 3: 0.85, 4: 0.95}
@@ -91,16 +93,19 @@ def parse_zap_results(content: bytes | str) -> list[dict]:
                 if observed:
                     evidence.append(f"Observed evidence: {observed}")
 
+                category = _category(alert)
+                severity = _severity(alert)
                 findings.append(
                     {
                         "id": f"ZAP-{plugin_id}-{len(findings) + 1:03d}",
                         "method": str(instance.get("method") or "UNKNOWN").upper(),
                         "endpoint": _endpoint(instance.get("uri") or site.get("@name")),
-                        "category": _category(alert),
-                        "severity": _severity(alert),
+                        "category": category,
+                        "severity": severity,
                         "confidence": _confidence(alert),
                         "evidence": evidence,
                         "source_tools": ["owasp-zap-import"],
+                        "potential_impact": potential_impact_for(category, severity),
                         "remediation": remediation,
                         "status": "imported-needs-review",
                     }

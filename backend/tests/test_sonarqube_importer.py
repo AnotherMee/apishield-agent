@@ -35,6 +35,7 @@ def test_parse_sonarqube_results_normalizes_issues() -> None:
                 "Static analysis location: api:routes/users.py:42",
             ],
             "source_tools": ["sonarqube-import"],
+            "potential_impact": "If the reported condition is exploitable, crafted input could affect interpreter behavior and may lead to unauthorized data access, modification, or service disruption.",
             "remediation": "Review SonarQube rule python:S3649 and apply its recommended secure coding remediation.",
             "status": "imported-needs-review",
         }

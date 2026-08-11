@@ -482,6 +482,8 @@ code { color: #c5d5e8; }
 .finding-section strong { font-size: 12px; color: #d8e4f2; }
 .finding-section ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.55; }
 .finding-section p { margin: 7px 0 0; line-height: 1.55; }
+.impact-section { padding: 12px; border: 1px solid #284765; border-radius: 10px; background: #0c2032; }
+.impact-section strong { color: #9bc7ff; }
 
 .source-row {
   display: flex;

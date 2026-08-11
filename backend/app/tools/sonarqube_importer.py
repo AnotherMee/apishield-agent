@@ -2,6 +2,8 @@ import json
 import re
 from pathlib import Path
 
+from app.tools.finding_impacts import potential_impact_for
+
 
 SEVERITY_MAP = {
     "BLOCKER": "critical",
@@ -72,16 +74,18 @@ def parse_sonarqube_results(content: bytes | str) -> list[dict]:
         severity_label = str(issue.get("severity") or issue.get("vulnerabilityProbability") or "INFO").upper()
         severity = SEVERITY_MAP.get(severity_label, {"HIGH": "high", "MEDIUM": "medium", "LOW": "low"}.get(severity_label, "info"))
         rule = str(issue.get("rule") or issue.get("key") or "unknown")
+        category = _category(issue)
         findings.append(
             {
                 "id": f"SONAR-{issue.get('key') or len(findings) + 1}",
                 "method": method,
                 "endpoint": endpoint,
-                "category": _category(issue),
+                "category": category,
                 "severity": severity,
                 "confidence": 0.72 if str(issue.get("status", "OPEN")).upper() not in {"CONFIRMED", "REVIEWED"} else 0.85,
                 "evidence": _evidence(issue),
                 "source_tools": ["sonarqube-import"],
+                "potential_impact": potential_impact_for(category, severity),
                 "remediation": f"Review SonarQube rule {rule} and apply its recommended secure coding remediation.",
                 "status": "imported-needs-review",
             }

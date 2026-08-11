@@ -58,6 +58,7 @@ def test_parse_zap_results_normalizes_alerts() -> None:
             "Observed evidence: header absent",
         ],
         "source_tools": ["owasp-zap-import"],
+        "potential_impact": "The condition may reduce defensive assurance and, if combined with another vulnerability, could increase risk to the affected API or its users.",
         "remediation": "Return an appropriate defensive header.",
         "status": "imported-needs-review",
     }

@@ -1,6 +1,6 @@
-import { FormEvent, useMemo, useState } from "react"
-import { MAX_UPLOAD_BYTES, runActiveScan, runPassiveDiscovery, runSampleScan, runUploadScan } from "./api"
-import type { ActiveScanJob, Observation, ScanReport, Severity } from "./types"
+import { FormEvent, useEffect, useMemo, useState } from "react"
+import { getZapHealth, MAX_UPLOAD_BYTES, runActiveScan, runPassiveDiscovery, runSampleScan, runUploadScan } from "./api"
+import type { ActiveScanJob, Observation, ScanReport, Severity, ZapHealth } from "./types"
 
 type Mode = "passive" | "active"
 type PassiveInput = "url" | "openapi"
@@ -66,8 +66,8 @@ function ModeSelector({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) =
         >
           <span className="mode-label"><span className="mode-icon" aria-hidden="true">A</span> Authorized Active Scan</span>
           <strong>Authorization-gated DAST</strong>
-          <p>Active security testing for targets you own or are explicitly authorized to test. OWASP ZAP is planned but not configured.</p>
-          <span className="mode-boundary">Authorization required · Currently disabled</span>
+          <p>Active security testing for targets you own or are explicitly authorized to test. OWASP ZAP runs only for backend-approved target origins.</p>
+          <span className="mode-boundary">Authorization and approved scope required</span>
         </button>
       </div>
     </section>
@@ -112,7 +112,7 @@ function ReportResults({ report }: { report: ScanReport }) {
           <span className="micro">ANALYSIS RESULT</span>
           <h2>{report.target || "OpenAPI specification"}</h2>
           <div className="report-tags">
-            <span>{report.target ? "Passive Discovery" : "Passive OpenAPI Review"}</span>
+            <span>{report.scan_mode === "authorized_active" ? "Authorized Active Scan" : report.target ? "Passive Discovery" : "Passive OpenAPI Review"}</span>
             <span>{report.planning_mode} planning</span>
             {report.planning_fallback_reason && <span className="fallback-tag">Fallback: {report.planning_fallback_reason}</span>}
           </div>
@@ -186,8 +186,9 @@ function ReportResults({ report }: { report: ScanReport }) {
                 <div className="confidence-row"><span>Confidence</span><strong>{Math.round(finding.confidence * 100)}%</strong></div>
                 <div className="confidence-track"><div style={{ width: `${Math.round(finding.confidence * 100)}%` }} /></div>
                 <div className="finding-section"><strong>Evidence</strong><ul>{finding.evidence.map((evidence, index) => <li key={index}>{evidence}</li>)}</ul></div>
+                <div className="finding-section impact-section"><strong>Potential Impact</strong><p>{finding.potential_impact}</p></div>
                 <div className="finding-section"><strong>Recommendation</strong><p>{finding.remediation}</p></div>
-                <div className="source-row">{finding.source_tools.map((source) => <span key={source}>{source}</span>)}<span className="finding-status">{titleCase(finding.status)}</span></div>
+                <div className="source-row">{finding.source_tools.map((source) => <span key={source}>Source: {source}</span>)}<span className="finding-status">{titleCase(finding.status)}</span></div>
               </article>
             )) : <div className="empty">No review findings were generated from the available evidence.</div>}
           </div>
@@ -220,20 +221,25 @@ function ReportResults({ report }: { report: ScanReport }) {
 }
 
 function ActiveResult({ job }: { job: ActiveScanJob }) {
+  const completed = job.status === "completed"
   return (
     <section className="panel active-result" role="status" aria-live="polite">
       <div className="status-symbol" aria-hidden="true">!</div>
       <div>
         <span className="micro">ACTIVE SCANNER STATUS</span>
         <h2>{titleCase(job.status)}</h2>
-        <p>OWASP ZAP integration has not been enabled yet.</p>
+        <p>{completed ? "OWASP ZAP completed the authorized active scan." : "The active scan did not complete."}</p>
         <p>{job.detail}</p>
         <div className="active-result-facts">
           <span><strong>Target</strong>{job.target}</span>
           <span><strong>Scanner</strong>OWASP ZAP</span>
           <span><strong>Findings</strong>{job.findings.length}</span>
         </div>
-        <div className="safety-confirmation">No active security testing was performed. No findings were fabricated or simulated.</div>
+        <div className="safety-confirmation">
+          {completed
+            ? "Findings were returned by OWASP ZAP and normalized by APIShield; manual validation is still required."
+            : "No findings were fabricated or simulated. Review the status above before retrying."}
+        </div>
       </div>
     </section>
   )
@@ -249,8 +255,13 @@ export default function App() {
   const [useAI, setUseAI] = useState(true)
   const [report, setReport] = useState<ScanReport | null>(null)
   const [activeJob, setActiveJob] = useState<ActiveScanJob | null>(null)
+  const [zapHealth, setZapHealth] = useState<ZapHealth | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    void getZapHealth().then(setZapHealth).catch(() => setZapHealth(null))
+  }, [])
 
   function switchMode(next: Mode) {
     setMode(next)
@@ -328,13 +339,13 @@ export default function App() {
       <header className="hero compact-hero">
         <div className="hero-copy">
           <div className="kicker">AGENTIC API SECURITY REVIEW</div>
-          <h1>One workspace. Two explicit security boundaries.</h1>
-          <p>Observe public API behavior with low-risk requests, or prepare an authorization-gated active scan workflow for future OWASP ZAP integration.</p>
+          <h1>Agentic API Security: From Discovery to Remediation</h1>
+          <p>Discover API security risks, orchestrate findings through LangGraph, and generate AI-assisted remediation guidance.</p>
         </div>
         <div className="trust-summary panel">
           <span className="micro">CURRENT CAPABILITY</span>
           <div><strong>Passive Discovery</strong><span>Available</span></div>
-          <div><strong>Authorized Active Scan</strong><span>Not configured</span></div>
+          <div><strong>Authorized Active Scan</strong><span>{zapHealth?.reachable ? "Available" : zapHealth?.configured ? "ZAP unavailable" : "Not configured"}</span></div>
         </div>
       </header>
 
@@ -391,22 +402,22 @@ export default function App() {
             </div>
             <div className="authorization-notice" role="note">
               <strong>Active security testing trust boundary</strong>
-              <p>This workflow is intended only for systems you own or have explicit permission to test. OWASP ZAP is planned, but active scanning is not currently enabled.</p>
+              <p>This workflow is intended only for systems you own or have explicit permission to test. The backend also requires the target origin to be present in its approved active-scan scope.</p>
             </div>
             <form className="target-form" onSubmit={submitActive}>
               <label htmlFor="active-target">Authorized target URL</label>
               <input id="active-target" type="url" inputMode="url" placeholder="https://authorized-api.example.com" value={activeTarget} onChange={(event) => setActiveTarget(event.target.value)} required />
               <div className="scanner-status" aria-label="Scanner configuration">
                 <span><small>Scanner</small><strong>OWASP ZAP</strong></span>
-                <span><small>Scanner status</small><strong>Not configured</strong></span>
-                <span><small>Current behavior</small><strong>No target contact</strong></span>
+                <span><small>Scanner status</small><strong>{zapHealth?.reachable ? "Ready" : zapHealth?.configured ? "Unavailable" : "Not configured"}</strong></span>
+                <span><small>Scope enforcement</small><strong>Backend approved origins only</strong></span>
               </div>
               <label className="authorization-check" htmlFor="authorization-confirmation">
                 <input id="authorization-confirmation" type="checkbox" checked={authorized} onChange={(event) => { setAuthorized(event.target.checked); setError("") }} />
                 <span>I confirm that I own this target or have explicit authorization to perform security testing against it.</span>
               </label>
               <button type="submit" disabled={!authorized || loading} aria-describedby={!authorized ? "active-disabled-reason" : undefined}>
-                {loading ? "Checking scanner…" : "Run Active Scan"}
+                {loading ? "OWASP ZAP scan running…" : "Run Active Scan"}
               </button>
               {!authorized && <p id="active-disabled-reason" className="disabled-reason">Acknowledge authorization to enable this request. The scanner remains unavailable until OWASP ZAP is configured.</p>}
             </form>
@@ -414,9 +425,10 @@ export default function App() {
           </section>
         )}
 
-        {loading && <div className="loading-banner" role="status" aria-live="polite">APIShield is processing the request…</div>}
+        {loading && <div className="loading-banner" role="status" aria-live="polite">{mode === "active" ? "OWASP ZAP scan running…" : "APIShield is processing the request…"}</div>}
         {report && <ReportResults report={report} />}
         {activeJob && <ActiveResult job={activeJob} />}
+        {activeJob?.report && <ReportResults report={activeJob.report} />}
       </main>
 
       <footer><span>APIShield Agent</span><span>LangGraph · FastAPI · React · OpenAI-ready</span></footer>

@@ -22,6 +22,24 @@ POTENTIAL_IMPACTS = {
         "Missing defensive headers may weaken browser-side protections and, if combined with another "
         "vulnerability, could increase the impact of content injection or framing attacks."
     ),
+    "missing-content-security-policy": (
+        "Without a suitable Content-Security-Policy, browser-rendered content may have fewer restrictions on resource loading and, if combined with content injection, could increase client-side risk."
+    ),
+    "missing-strict-transport-security": (
+        "Without Strict-Transport-Security, a user's first connection may be more susceptible to an HTTP downgrade on an untrusted network."
+    ),
+    "missing-x-content-type-options": (
+        "Without nosniff, browsers may infer a different media type in some contexts, which can increase risk if untrusted content is rendered."
+    ),
+    "missing-referrer-policy": (
+        "Without an explicit Referrer-Policy, browser requests may disclose more source URL information than the application intends."
+    ),
+    "missing-permissions-policy": (
+        "Without an explicit Permissions-Policy, embedded or browser-rendered content may retain access to features that are not required."
+    ),
+    "missing-framing-protection": (
+        "If the response is browser-rendered, absent framing restrictions may allow it to be embedded by another origin and could increase clickjacking risk."
+    ),
     "permissive-cors": (
         "An overly broad CORS policy may allow untrusted origins to read API responses in a user's browser, "
         "particularly if combined with credentials or weak authorization controls."
@@ -29,6 +47,30 @@ POTENTIAL_IMPACTS = {
     "server-metadata-exposure": (
         "Exposed product or intermediary metadata can assist reconnaissance and may help an attacker focus "
         "follow-up testing on known component weaknesses."
+    ),
+    "cookie-missing-secure": (
+        "Cookies without Secure may be sent over an unencrypted connection if an HTTP path remains reachable, increasing the risk of disclosure in transit."
+    ),
+    "cookie-missing-httponly": (
+        "Cookies accessible to client-side scripts could be exposed if another client-side vulnerability is present."
+    ),
+    "cookie-missing-samesite": (
+        "Cookies without an explicit SameSite policy may be included in cross-site requests and can increase cross-site request risk depending on application behavior."
+    ),
+    "missing-https-redirect": (
+        "Users following an HTTP entry point may remain on an unencrypted connection, which can increase interception or modification risk on an untrusted network."
+    ),
+    "https-redirect-downgrade": (
+        "Redirecting from HTTPS to HTTP may reduce transport confidentiality and integrity for subsequent requests."
+    ),
+    "sensitive-response-cache-policy": (
+        "If the response contains user-specific or sensitive data, permissive caching could make that data available through shared or local caches."
+    ),
+    "content-type-inconsistency": (
+        "A content-type mismatch can cause clients or browsers to interpret a response unexpectedly and may increase risk when untrusted content is involved."
+    ),
+    "public-security-contact-metadata": (
+        "Published security contact metadata can support coordinated vulnerability reporting; stale metadata could make responsible disclosure less reliable."
     ),
     "public-api-metadata": (
         "Public API descriptions may disclose operations, parameters, or internal conventions that can "

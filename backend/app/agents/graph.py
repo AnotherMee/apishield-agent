@@ -98,11 +98,11 @@ def passive_signal_node(state: State):
     target = state.get("target") or "unknown"
     findings = []
 
-    def add(category: str, severity: str, evidence: str, remediation: str):
+    def add(category: str, severity: str, evidence: str, remediation: str, observation: dict):
         findings.append({
             "source": "passive-http",
             "method": "GET",
-            "endpoint": target,
+            "endpoint": observation.get("url") or target,
             "category": category,
             "severity": severity,
             "evidence": evidence,
@@ -112,40 +112,118 @@ def passive_signal_node(state: State):
     https = by_category.get("https-usage")
     if https and not https["value"]:
         add("insecure-transport", "medium", "The final response was served over HTTP rather than HTTPS.",
-            "Serve the API over HTTPS and redirect HTTP traffic to HTTPS.")
+            "Serve the API over HTTPS and redirect HTTP traffic to HTTPS.", https)
 
     security = by_category.get("security-headers")
     if security:
         present = security["value"]
-        checked = security.get("metadata", {}).get("checked", [])
-        missing = [name for name in checked if name not in present]
-        if missing:
-            add("missing-security-headers", "low", f"Missing response security headers: {', '.join(missing)}.",
-                "Return security headers appropriate to the API response and deployment context.")
+        header_checks = {
+            "content-security-policy": (
+                "missing-content-security-policy", "The response did not include Content-Security-Policy.",
+                "Define a Content-Security-Policy appropriate to the response content and application context.",
+            ),
+            "x-content-type-options": (
+                "missing-x-content-type-options", "The response did not include X-Content-Type-Options.",
+                "Return X-Content-Type-Options: nosniff where browser content-type sniffing is not required.",
+            ),
+            "referrer-policy": (
+                "missing-referrer-policy", "The response did not include Referrer-Policy.",
+                "Set a Referrer-Policy that limits unnecessary URL information sent to other origins.",
+            ),
+            "permissions-policy": (
+                "missing-permissions-policy", "The response did not include Permissions-Policy.",
+                "Define a Permissions-Policy for browser features relevant to the application.",
+            ),
+        }
+        for header, (category, evidence, remediation) in header_checks.items():
+            if header not in present:
+                add(category, "low", evidence, remediation, security)
+
+        if https and https["value"] and "strict-transport-security" not in present:
+            add("missing-strict-transport-security", "low",
+                "The HTTPS response did not include Strict-Transport-Security.",
+                "Return a carefully scoped Strict-Transport-Security policy after confirming HTTPS coverage.", security)
+
+        csp = str(present.get("content-security-policy", "")).lower()
+        if "x-frame-options" not in present and "frame-ancestors" not in csp:
+            add("missing-framing-protection", "low",
+                "Neither X-Frame-Options nor a Content-Security-Policy frame-ancestors directive was observed.",
+                "Use CSP frame-ancestors or X-Frame-Options to define whether browser framing is permitted.", security)
 
     cors = by_category.get("cors-headers")
-    if cors and cors["value"].get("access-control-allow-origin") == "*":
-        credentials = cors["value"].get("access-control-allow-credentials", "").lower() == "true"
-        add("permissive-cors", "high" if credentials else "medium",
-            "The response declares Access-Control-Allow-Origin: *." + (" Credentials are also allowed." if credentials else ""),
-            "Restrict CORS to explicitly trusted origins and avoid credentialed wildcard policies.")
+    if cors:
+        values = cors["value"]
+        origin = values.get("access-control-allow-origin", "").strip().lower()
+        credentials = values.get("access-control-allow-credentials", "").lower() == "true"
+        methods = values.get("access-control-allow-methods", "")
+        if origin in {"*", "null"}:
+            add("permissive-cors", "high" if credentials else "medium",
+                f"The ordinary response declared Access-Control-Allow-Origin: {origin}." + (" Access-Control-Allow-Credentials was also true." if credentials else ""),
+                "Restrict CORS response headers to explicitly trusted origins and avoid broad credentialed policies.", cors)
+        if "*" in methods:
+            add("permissive-cors-methods", "medium",
+                f"The response declared a wildcard Access-Control-Allow-Methods policy: {methods}.",
+                "List only the cross-origin HTTP methods required by trusted browser clients.", cors)
 
     metadata = by_category.get("server-metadata")
     if metadata and metadata["value"]:
-        add("server-metadata-exposure", "info", f"The response exposed server metadata: {metadata['value']}.",
-            "Minimize unnecessary product and intermediary version disclosure in response headers.")
+        add("server-metadata-exposure", "info", f"The response exposed server or framework metadata: {metadata['value']}.",
+            "Minimize unnecessary product, framework, and intermediary disclosure in response headers.", metadata)
+
+    cookies = by_category.get("cookies")
+    if cookies and cookies["value"]:
+        missing_secure = [item["name"] for item in cookies["value"] if not item["secure"]]
+        missing_httponly = [item["name"] for item in cookies["value"] if not item["httponly"]]
+        missing_samesite = [item["name"] for item in cookies["value"] if not item["samesite"]]
+        if missing_secure:
+            add("cookie-missing-secure", "medium", f"Cookies without the Secure attribute were observed: {', '.join(missing_secure)}.",
+                "Apply Secure to cookies that should only be sent over HTTPS.", cookies)
+        if missing_httponly:
+            add("cookie-missing-httponly", "low", f"Cookies without the HttpOnly attribute were observed: {', '.join(missing_httponly)}.",
+                "Apply HttpOnly to cookies that do not require client-side script access.", cookies)
+        if missing_samesite:
+            add("cookie-missing-samesite", "low", f"Cookies without a SameSite attribute were observed: {', '.join(missing_samesite)}.",
+                "Set an explicit SameSite policy that matches the application's cross-site requirements.", cookies)
+
+    redirect = by_category.get("https-redirect-behavior")
+    if redirect:
+        behavior = redirect["value"]
+        if behavior.get("downgrade_observed"):
+            add("https-redirect-downgrade", "medium", "A redirect from an HTTPS URL to an HTTP URL was observed.",
+                "Keep redirect destinations on HTTPS and remove transport downgrade paths.", redirect)
+        elif behavior.get("requested_scheme") == "http" and not behavior.get("upgraded"):
+            add("missing-https-redirect", "low", "An HTTP request did not upgrade to HTTPS through the observed redirect chain.",
+                "Redirect public HTTP entry points to their HTTPS equivalents.", redirect)
+
+    cache = by_category.get("cache-policy")
+    if cache and cache["value"].get("potentially_sensitive"):
+        cache_control = str(cache["value"].get("cache-control", "")).lower()
+        if "public" in cache_control or not any(directive in cache_control for directive in ("no-store", "private")):
+            add("sensitive-response-cache-policy", "low",
+                f"A response with potentially sensitive indicators used Cache-Control: {cache_control or '(not present)' }.",
+                "Review whether the response can contain user-specific data and apply private or no-store where caching is inappropriate.", cache)
+
+    content_type = by_category.get("content-type-consistency")
+    if content_type and not content_type["value"].get("consistent"):
+        value = content_type["value"]
+        add("content-type-inconsistency", "low",
+            f"The declared content type '{value.get('declared') or '(not present)'}' did not match the observed {value.get('detected')} response shape.",
+            "Return an accurate Content-Type header and use X-Content-Type-Options: nosniff where appropriate.", content_type)
 
     for observation in observations:
         if observation["category"] == "public-openapi-document":
             add("public-api-metadata", "info", f"A public API description was available at {observation['url']}.",
-                "Confirm that public API metadata is intentional and does not disclose internal-only operations.")
+                "Confirm that public API metadata is intentional and does not disclose internal-only operations.", observation)
+        elif observation["category"] == "public-security-txt":
+            add("public-security-contact-metadata", "info", f"A security.txt document was directly available at {observation['url']} with fields {observation['value']['fields']}.",
+                "Maintain the published security contact metadata and keep its expiration information current.", observation)
 
     return {
         "raw_findings": findings,
         "timeline": add_event(
             state, "passive-signals", "Collect Security Signals",
-            f"Converted {len(observations)} observations into {len(findings)} review signals",
-            "passive_discovery.observations", "Applied non-invasive rules to ordinary HTTP response metadata.",
+            f"Raw observations: {len(observations)}; generated signals: {len(findings)}",
+            "passive_discovery.observations", f"Applied non-invasive rules to {len(observations)} collected observations and generated {len(findings)} evidence-backed signals.",
         ),
     }
 
@@ -206,8 +284,8 @@ def correlate_node(state: State):
     return {
         "findings": findings,
         "timeline": add_event(
-            state, "correlate", "Correlate Findings", f"Consolidated signals into {len(findings)} findings",
-            "graph.correlate_findings", f"Grouped signals by method, endpoint, and defensive category.",
+            state, "correlate", "Correlate Findings", f"Generated signals: {len(state['raw_findings'])}; final correlated findings: {len(findings)}",
+            "graph.correlate_findings", f"Grouped {len(state['raw_findings'])} signals by method, endpoint, and defensive category into {len(findings)} findings.",
         ),
     }
 

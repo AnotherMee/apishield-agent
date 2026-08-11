@@ -17,6 +17,7 @@ class State(TypedDict, total=False):
     observations: list[dict]
     plan: list[dict]
     planning_mode: str
+    planning_fallback_reason: str | None
     raw_findings: list[dict]
     findings: list[dict]
     timeline: list[dict]
@@ -65,13 +66,19 @@ def parse_node(state: State):
     }
 
 def plan_node(state: State):
-    plan, mode = create_plan(state["endpoints"], state["use_ai"])
+    plan, mode, fallback_reason = create_plan(state["endpoints"], state["use_ai"])
+    detail = f"Generated {len(plan)} prioritized steps using {mode} planning"
+    tool_summary = f"Produced a schema-validated {mode.lower()} defensive review plan."
+    if fallback_reason:
+        detail += f" (fallback: {fallback_reason})"
+        tool_summary += f" Fallback reason: {fallback_reason}."
     return {
         "plan": plan,
         "planning_mode": mode,
+        "planning_fallback_reason": fallback_reason,
         "timeline": add_event(
-            state, "plan", "Plan Review", f"Generated {len(plan)} prioritized steps using {mode} planning",
-            "planner.create_plan", f"Produced a schema-validated {mode.lower()} defensive review plan.",
+            state, "plan", "Plan Review", detail,
+            "planner.create_plan", tool_summary,
         ),
     }
 
@@ -239,6 +246,7 @@ def report_node(state: State):
         "scan_mode": state.get("scan_mode", ScanMode.PASSIVE.value),
         "target": state.get("target"),
         "planning_mode": state["planning_mode"],
+        "planning_fallback_reason": state.get("planning_fallback_reason"),
         "endpoint_count": len(state["endpoints"]),
         "plan": state["plan"],
         "timeline": timeline,

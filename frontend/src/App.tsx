@@ -114,6 +114,7 @@ function ReportResults({ report }: { report: ScanReport }) {
           <div className="report-tags">
             <span>{report.target ? "Passive Discovery" : "Passive OpenAPI Review"}</span>
             <span>{report.planning_mode} planning</span>
+            {report.planning_fallback_reason && <span className="fallback-tag">Fallback: {report.planning_fallback_reason}</span>}
           </div>
         </div>
         <div className="metrics">

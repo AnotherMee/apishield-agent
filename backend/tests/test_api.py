@@ -14,17 +14,45 @@ def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_openai_health_does_not_expose_credentials(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sensitive-test-value")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5-mini")
+    response = client.get("/health/openai")
+    assert response.status_code == 200
+    assert response.json() == {"configured": True, "model": "gpt-5-mini"}
+    assert "sensitive-test-value" not in response.text
+
+
+def test_openai_health_reports_unconfigured(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    response = client.get("/health/openai")
+    assert response.status_code == 200
+    assert response.json() == {"configured": False, "model": None}
+
+
 def test_sample_review_is_deterministic() -> None:
     response = client.post("/scan/sample?use_ai=false")
     report = response.json()
     assert response.status_code == 200
     assert report["endpoint_count"] == 4
     assert report["planning_mode"] == "Deterministic"
+    assert report["planning_fallback_reason"] == "AI-assisted planning not requested"
     assert report["summary"]["total_findings"] == 4
     assert len(report["timeline"]) == 5
     assert [event["node"] for event in report["timeline"]] == ["parse", "plan", "scan", "correlate", "report"]
     assert report["timeline"][0]["tool_invocations"][0]["name"] == "openapi_parser.inventory"
+    assert "AI-assisted planning not requested" in report["timeline"][1]["detail"]
     assert len(report["remediation_report"]) == 4
+
+
+def test_sample_review_passes_use_ai_into_graph_state(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    response = client.post("/scan/sample?use_ai=true")
+    report = response.json()
+    assert response.status_code == 200
+    assert report["planning_mode"] == "Deterministic"
+    assert report["planning_fallback_reason"] == "OPENAI_API_KEY not configured"
+    assert "OPENAI_API_KEY not configured" in report["timeline"][1]["detail"]
 
 
 def test_upload_rejects_invalid_extension() -> None:

@@ -68,10 +68,10 @@ def deterministic_plan(endpoints: list[dict]) -> list[dict]:
     return [step.model_dump() for step in steps]
 
 
-def ai_plan(endpoints: list[dict]) -> list[dict] | None:
+def ai_plan(endpoints: list[dict]) -> tuple[list[dict] | None, str | None]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        return None, "OPENAI_API_KEY not configured"
 
     inventory = json.dumps(endpoints, separators=(",", ":"), ensure_ascii=True)
     try:
@@ -97,7 +97,8 @@ def ai_plan(endpoints: list[dict]) -> list[dict] | None:
         )
         parsed = response.output_parsed
         if not parsed:
-            return None
+            logger.warning("OpenAI planning returned no valid structured output")
+            return None, "OpenAI returned invalid output"
 
         allowed_paths = {endpoint["path"] for endpoint in endpoints}
         steps = []
@@ -105,15 +106,16 @@ def ai_plan(endpoints: list[dict]) -> list[dict] | None:
             data = step.model_dump()
             data["endpoints"] = [path for path in data["endpoints"] if path in allowed_paths]
             steps.append(data)
-        return steps
+        return steps, None
     except Exception:
-        logger.warning("OpenAI planning failed; using deterministic fallback", exc_info=True)
-        return None
+        logger.exception("OpenAI planning request failed; using deterministic fallback")
+        return None, "OpenAI request failed"
 
 
-def create_plan(endpoints: list[dict], use_ai: bool) -> tuple[list[dict], str]:
+def create_plan(endpoints: list[dict], use_ai: bool) -> tuple[list[dict], str, str | None]:
     if use_ai:
-        plan = ai_plan(endpoints)
+        plan, fallback_reason = ai_plan(endpoints)
         if plan:
-            return plan, "OpenAI-assisted"
-    return deterministic_plan(endpoints), "Deterministic"
+            return plan, "OpenAI-assisted", None
+        return deterministic_plan(endpoints), "Deterministic", fallback_reason
+    return deterministic_plan(endpoints), "Deterministic", "AI-assisted planning not requested"

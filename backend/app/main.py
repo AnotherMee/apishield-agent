@@ -55,6 +55,7 @@ def initial_state(spec_path: str, use_ai: bool):
         "observations": [],
         "plan": [],
         "planning_mode": "",
+        "planning_fallback_reason": None,
         "raw_findings": [],
         "findings": [],
         "timeline": [],
@@ -66,6 +67,15 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/health/openai")
+def openai_health():
+    configured = bool(os.getenv("OPENAI_API_KEY"))
+    return {
+        "configured": configured,
+        "model": os.getenv("OPENAI_MODEL", "gpt-5-mini") if configured else None,
+    }
+
+
 def mode_state(mode: ScanMode, target: str, use_ai: bool) -> dict:
     return {
         "scan_mode": mode.value,
@@ -75,6 +85,7 @@ def mode_state(mode: ScanMode, target: str, use_ai: bool) -> dict:
         "observations": [],
         "plan": [],
         "planning_mode": "",
+        "planning_fallback_reason": None,
         "raw_findings": [],
         "findings": [],
         "timeline": [],

@@ -640,6 +640,7 @@ button.mode-card {
 .report-identity h2 { overflow-wrap: anywhere; }
 .report-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
 .report-tags span { padding: 5px 8px; border-radius: 7px; background: #102d50; color: #9bc7ff; font-size: 11px; }
+.report-tags .fallback-tag { background: #302115; color: #ffc589; }
 .report-stack .results-grid, .report-stack .remediation-panel { margin-top: 0; }
 
 .observation-note { margin: -8px 0 16px; color: #7e92aa; font-size: 12px; line-height: 1.5; }

@@ -61,6 +61,7 @@ class ScanReport(BaseModel):
     scan_mode: ScanMode
     target: str | None = None
     planning_mode: str = ""
+    planning_fallback_reason: str | None = None
     endpoint_count: int = 0
     plan: list[dict[str, Any]] = Field(default_factory=list)
     timeline: list[dict[str, Any]] = Field(default_factory=list)

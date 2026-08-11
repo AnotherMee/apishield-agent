@@ -57,6 +57,7 @@ export type ScanReport = {
   scan_mode?: ScanMode
   target?: string | null
   planning_mode: string
+  planning_fallback_reason?: string | null
   endpoint_count: number
   plan: ReviewStep[]
   timeline: TimelineItem[]

@@ -6,7 +6,10 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.agents.graph import build_graph
+from app.agents.graph import build_active_graph, build_graph, build_passive_graph
+from app.models import ActiveScanJob, ActiveScanRequest, PassiveDiscoveryRequest, ScanMode, ScanReport
+from app.services.passive_discovery import PassiveDiscoveryError, passive_discover
+from app.services.target_policy import TargetPolicyError
 from app.tools.zap_importer import parse_zap_results
 from app.tools.sonarqube_importer import parse_sonarqube_results
 from app.tools.finding_correlation import correlate_imported_findings
@@ -35,7 +38,10 @@ def initial_state(spec_path: str, use_ai: bool):
     return {
         "spec_path": spec_path,
         "use_ai": use_ai,
+        "scan_mode": ScanMode.PASSIVE.value,
+        "target": None,
         "endpoints": [],
+        "observations": [],
         "plan": [],
         "planning_mode": "",
         "raw_findings": [],
@@ -47,6 +53,44 @@ def initial_state(spec_path: str, use_ai: bool):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+def mode_state(mode: ScanMode, target: str, use_ai: bool) -> dict:
+    return {
+        "scan_mode": mode.value,
+        "target": target,
+        "use_ai": use_ai,
+        "endpoints": [],
+        "observations": [],
+        "plan": [],
+        "planning_mode": "",
+        "raw_findings": [],
+        "findings": [],
+        "timeline": [],
+        "report": {},
+    }
+
+
+@app.post("/discovery/passive", response_model=ScanReport)
+async def discover_passively(request: PassiveDiscoveryRequest):
+    try:
+        observations = await passive_discover(str(request.target))
+        state = mode_state(ScanMode.PASSIVE, str(request.target), request.use_ai)
+        state["observations"] = [item.model_dump(mode="json") for item in observations]
+        result = await build_passive_graph().ainvoke(state)
+        return result["report"]
+    except (TargetPolicyError, PassiveDiscoveryError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Passive discovery failed")
+        raise HTTPException(status_code=502, detail="Passive discovery could not be completed.") from exc
+
+
+@app.post("/scans/active", response_model=ActiveScanJob)
+async def request_authorized_active_scan(request: ActiveScanRequest):
+    state = mode_state(ScanMode.AUTHORIZED_ACTIVE, str(request.target), request.use_ai)
+    result = await build_active_graph().ainvoke(state)
+    return result["active_job"]
 
 @app.post("/scan/sample")
 def scan_sample(use_ai: bool = False):

@@ -1,0 +1,71 @@
+{
+  "project": "APIShield Agent",
+  "scan_mode": "passive",
+  "target": "https://example.test/",
+  "planning_mode": "Deterministic",
+  "planning_fallback_reason": "AI-assisted planning not requested",
+  "endpoint_count": 0,
+  "plan": [
+    {
+      "priority": "medium",
+      "title": "Review passive response metadata",
+      "rationale": "Use collected observations to prioritize defensive review.",
+      "endpoints": []
+    }
+  ],
+  "timeline": [
+    {
+      "node": "plan",
+      "step": "Plan Review",
+      "detail": "Generated a deterministic plan",
+      "status": "completed",
+      "tool_invocations": [
+        {
+          "name": "planner.create_plan",
+          "status": "completed",
+          "summary": "Produced a defensive review plan."
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "category": "http-status",
+      "source": "passive-http",
+      "url": "https://example.test/",
+      "value": 200,
+      "metadata": {}
+    }
+  ],
+  "summary": {
+    "total_findings": 1,
+    "by_severity": { "low": 1 }
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "source": "passive-http",
+      "method": "GET",
+      "endpoint": "https://example.test/",
+      "category": "missing-referrer-policy",
+      "severity": "low",
+      "confidence": 0.72,
+      "evidence": ["The response did not include Referrer-Policy."],
+      "source_tools": ["passive-http"],
+      "potential_impact": "The response may disclose more source URL information than intended.",
+      "remediation": "Set an appropriate Referrer-Policy.",
+      "status": "needs-review",
+      "correlation": null
+    }
+  ],
+  "remediation_report": [
+    {
+      "category": "missing-referrer-policy",
+      "severity": "low",
+      "recommendation": "Set an appropriate Referrer-Policy.",
+      "affected_endpoints": ["GET https://example.test/"],
+      "finding_count": 1
+    }
+  ],
+  "disclaimer": "Passive findings are review signals and do not establish that harm occurred."
+}

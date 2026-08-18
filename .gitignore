@@ -7,3 +7,8 @@ backend/.uploads/
 frontend/dist/
 frontend/*.tsbuildinfo
 *.pyc
+**/bin/
+**/obj/
+.dotnet-cli/
+dotnet/**/*.user
+dotnet/**/appsettings.Local.json

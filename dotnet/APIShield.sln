@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "APIShield.Client", "APIShield.Client\APIShield.Client.csproj", "{F532BEE7-EE85-4DE6-9AD4-48E2A83FD0AB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "APIShield.Gateway", "APIShield.Gateway\APIShield.Gateway.csproj", "{918D1D33-E3C7-42D8-A684-A474224C8B9D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "APIShield.Tests", "APIShield.Tests\APIShield.Tests.csproj", "{C2F1F3C1-11E3-4858-AB39-FE0DF967559E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F532BEE7-EE85-4DE6-9AD4-48E2A83FD0AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F532BEE7-EE85-4DE6-9AD4-48E2A83FD0AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F532BEE7-EE85-4DE6-9AD4-48E2A83FD0AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F532BEE7-EE85-4DE6-9AD4-48E2A83FD0AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{918D1D33-E3C7-42D8-A684-A474224C8B9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{918D1D33-E3C7-42D8-A684-A474224C8B9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{918D1D33-E3C7-42D8-A684-A474224C8B9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{918D1D33-E3C7-42D8-A684-A474224C8B9D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C2F1F3C1-11E3-4858-AB39-FE0DF967559E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2F1F3C1-11E3-4858-AB39-FE0DF967559E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2F1F3C1-11E3-4858-AB39-FE0DF967559E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2F1F3C1-11E3-4858-AB39-FE0DF967559E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
